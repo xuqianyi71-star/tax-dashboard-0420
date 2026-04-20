@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球销售税策略复盘汇总看板</title>
+    <style>
+        /* 主框架样式 */
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: #f0f2f5;
+            overflow: hidden;
+        }
+        .top-nav {
+            background: #001529;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 1000;
+            position: relative;
+        }
+        .nav-btn {
+            padding: 8px 18px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.65);
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .nav-btn:hover { color: #fff; border-color: #1890ff; }
+        .nav-btn.active { color: #fff; background: #1890ff; border-color: #1890ff; }
+
+        /* 内容容器容器 */
+        .main-container {
+            width: 100%;
+            height: calc(100vh - 60px); /* 减去导航栏高度 */
+            position: relative;
+        }
+        .page-content {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: none; /* 默认隐藏 */
+            border: none;
+        }
+        .page-content.active {
+            display: block; /* 显示激活的页面 */
+        }
+        
+        /* 内部 iframe 模拟（解决 file 协议限制） */
+        .inner-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <button class="nav-btn active" onclick="switchTab(this, 'page1')">🇺🇸 美国站</button>
+    <button class="nav-btn" onclick="switchTab(this, 'page2')">🇨🇦 加拿大站</button>
+    <button class="nav-btn" onclick="switchTab(this, 'page3')">🇬🇧 英国站</button>
+    <button class="nav-btn" onclick="switchTab(this, 'page4')">🇮🇪 爱尔兰站</button>
+    <button class="nav-btn" onclick="switchTab(this, 'page5')">🇦🇺 澳洲站</button>
+</nav>
+
+<div class="main-container">
+    <div id="page1" class="page-content active">
+        <iframe class="inner-frame" src="美国sales tax时间线（终3）.html"></iframe>
+    </div>
+
+    <div id="page2" class="page-content">
+        <iframe class="inner-frame" src="加拿大站销售税策略调整全链路.html"></iframe>
+    </div>
+
+    <div id="page3" class="page-content">
+        <iframe class="inner-frame" src="英国VAT时间线完整版.html"></iframe>
+    </div>
+
+    <div id="page4" class="page-content">
+        <iframe class="inner-frame" src="爱尔兰VAT时间线.html"></iframe>
+    </div>
+
+    <div id="page5" class="page-content">
+        <iframe class="inner-frame" src="AU澳洲GST复盘.html"></iframe>
+    </div>
+</div>
+
+<script>
+    function switchTab(btn, pageId) {
+        // 1. 切换按钮样式
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // 2. 切换页面显示
+        document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        
+        // 3. 触发 iframe 内部图表重绘（防止尺寸错位）
+        const activeIframe = document.querySelector('#' + pageId + ' iframe');
+        if (activeIframe && activeIframe.contentWindow) {
+            activeIframe.contentWindow.dispatchEvent(new Event('resize'));
+        }
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>爱尔兰站 VAT 策略调整全链路深度复盘</title>
+    <script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #f0f2f5; padding: 20px; font-family: "PingFang SC", "Microsoft YaHei", Roboto, sans-serif; }
+        .container { max-width: 1500px; margin: 0 auto; }
+        .main-title { text-align: center; font-size: 28px; font-weight: 600; color: #1f2f3a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0; }
+        .tab-buttons { text-align: center; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+        .tab-btn { padding: 10px 24px; font-size: 15px; font-weight: 600; border: none; border-radius: 40px; cursor: pointer; transition: all 0.25s; background: #fff; color: #2c3e4e; border: 1px solid #d9e1ec; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .tab-btn.active { background: #1890ff; color: white; border-color: #1890ff; box-shadow: 0 6px 14px rgba(24,144,255,0.25); }
+        .tab-btn:not(.active):hover { background: #eef2f7; border-color: #b0c4de; }
+        .event-note { background: #fef7e0; border-left: 4px solid #fa8c16; padding: 12px 20px; margin-bottom: 16px; border-radius: 12px; font-size: 13px; line-height: 1.6; color: #5c4e2e; }
+        .event-note strong { color: #d46b08; margin-right: 8px; }
+        #mainContainer, #dim2Container { width: 100%; min-width: 0; }
+        #main { width: 100%; height: 500px; background: #fff; padding: 16px 16px 8px; border-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+        .slicer-wrapper { margin-top: 24px; background: #fff; border-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); padding: 16px 20px 20px; }
+        .slicer-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 16px; gap: 12px; }
+        .slicer-title { font-size: 18px; font-weight: 600; color: #1f2f3a; border-left: 4px solid #1890ff; padding-left: 12px; }
+        .slicer-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+        .slicer-btn { padding: 6px 16px; font-size: 13px; font-weight: 500; border-radius: 32px; border: 1px solid #d9e1ec; background: #f8f9fc; cursor: pointer; transition: all 0.2s; color: #2c5a7a; }
+        .slicer-btn.active { background: #1890ff; border-color: #1890ff; color: white; box-shadow: 0 2px 6px rgba(24,144,255,0.2); }
+        .slicer-btn:not(.active):hover { background: #eef2f7; border-color: #b0c4de; }
+        #slicerChart { width: 100%; height: 450px; }
+        .dim2-chart-wrapper { width: 100%; background: #fff; padding: 16px 16px 8px; border-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .dim2-chart { width: 100%; height: 400px; }
+        .insight-grid { margin-top: 24px; }
+        .insight-card { background: #fff; padding: 20px 26px; border-radius: 20px; border-left: 6px solid #fa8c16; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .insight-card h3 { margin-bottom: 12px; font-size: 1.25rem; font-weight: 600; color: #1f2f3a; }
+        .insight-card ul { margin-left: 20px; font-size: 14px; line-height: 1.65; color: #2c3e4e; }
+        .insight-card li { margin-bottom: 8px; }
+        @media (max-width: 720px) {
+            .tab-btn { padding: 6px 16px; font-size: 12px; }
+            #main { height: 420px; }
+            #slicerChart { height: 350px; }
+            .main-title { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="main-title">爱尔兰站 VAT 策略调整全链路深度复盘</div>
+    
+    <div class="tab-buttons">
+        <button class="tab-btn active" data-tab="1">维度一：全站核心趋势</button>
+        <button class="tab-btn" data-tab="2">维度二：结算端表现</button>
+    </div>
+
+    <div id="eventNoteArea" class="event-note"></div>
+
+    <!-- 维度一容器 -->
+    <div id="mainContainer">
+        <div id="main"></div>
+        <div id="slicerChartContainer" class="slicer-wrapper">
+            <div class="slicer-header">
+                <div class="slicer-title">指标深度趋势 (切片器)</div>
+                <div class="slicer-buttons" id="slicerBtnGroup"></div>
+            </div>
+            <div id="slicerChart"></div>
+        </div>
+    </div>
+
+    <!-- 维度二容器 -->
+    <div id="dim2Container" style="display: none;">
+        <div class="dim2-chart-wrapper">
+            <div class="slicer-header" style="margin-bottom: 12px;">
+                <div class="slicer-title">提交订单率 & 支付成功率</div>
+            </div>
+            <div id="dim2Chart1" class="dim2-chart"></div>
+        </div>
+        <div class="dim2-chart-wrapper">
+            <div class="slicer-header" style="margin-bottom: 12px;">
+                <div class="slicer-title">填写地址率 & 选择物流率</div>
+            </div>
+            <div id="dim2Chart2" class="dim2-chart"></div>
+        </div>
+    </div>
+
+    <div class="insight-grid">
+        <div class="insight-card" id="dynamicConclusionCard">
+            <h3>复盘结论 · <span id="conclusionTabName">维度一：全站核心趋势</span></h3>
+            <div id="conclusionContent"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- 数据定义 (基于最新Excel: 基准 + 2026-03-12 至 2026-04-19) ----------
+        const dateAxisFull = ["基准","3/12","3/13","3/14","3/15","3/16","3/17","3/18","3/19","3/20","3/21","3/22","3/23","3/24","3/25","3/26","3/27","3/28","3/29","3/30","3/31","4/1","4/2","4/3","4/4","4/5","4/6","4/7","4/8","4/9","4/10","4/11","4/12","4/13","4/14","4/15","4/16","4/17","4/18","4/19"];
+        const daysWithoutBase = dateAxisFull.slice(1);
+        
+        // 浏览人数
+        const browseData = [5989,5388,4967,4558,6380,4322,4145,3768,3348,3984,4616,4361,4335,4154,4206,3749,3587,3611,3732,3805,3885,4028,4220,4281,4146,4281,3737,4054,4357,4066,4297,4536,5046,4214,22181,7382,4603,4297,4389,4277];
+        // 销售额
+        const salesData = [9069.01,6480.87,6116.22,4178.24,5121.39,3920.09,3458.12,3729.69,4610.86,3131.72,3719.23,2720.94,3011.73,4055.34,2924.09,3911.07,2533.08,3437.14,3199.56,2744.5,2345.11,2813.83,2487.06,3549.58,2593.96,2420.7,2212.55,2403.67,2100.1,2745.37,2939.28,2679.76,3043.87,2307.7,1694.68,2637.58,3127.73,2559.4,3414.31,2782.15];
+        // ROI
+        const roiData = [1.78,1.42,1.54,1.13,1.01,1.36,1.33,1.75,2.36,1.61,1.88,1.32,1.66,2.34,1.6,2.29,1.73,2.17,1.82,1.73,1.54,1.98,1.72,2.18,1.45,1.47,1.65,1.73,1.67,1.9,1.94,1.56,1.59,1.7,1.27,1.81,2.01,1.6,1.94,1.82];
+        // 毛利润
+        const grossProfitData = [971.72,-451.38,-781.82,-1271.7,-2211.82,-693.81,-695.75,-319.56,607.87,-300.17,-83.68,-615.13,-214.85,352.19,-274.66,369.2,-202.27,221.58,-95.19,-108.19,-297.54,-55.24,-211.8,259.75,-463.32,-276.84,-249.34,-188.28,-176.61,17.1,-14.38,-251.03,-230.48,-62.71,-424.58,-37.06,176.45,-242.4,95.7,-124.39];
+        // 客单价
+        const avgOrderData = [41.05,41.81,50.13,46.95,49.24,50.26,47.37,53.28,56.23,51.34,47.08,45.35,44.29,49.46,46.41,51.46,46.06,46.45,44.44,46.52,48.86,47.69,46.06,47.97,43.97,44.01,46.09,49.05,39.62,46.53,48.18,40.0,44.76,44.38,47.07,46.27,46.0,46.53,48.78,44.16];
+        // FB CPC
+        const cpcFBData = [0.6123,0.6351,0.5455,0.5565,0.4758,0.4447,0.4445,0.4226,0.4556,0.5049,0.5588,0.5125,0.46,0.4343,0.4121,0.4822,0.4662,0.4328,0.4353,0.4287,0.4249,0.4221,0.4145,0.4349,0.419,0.3861,0.3877,0.3605,0.3606,0.413,0.4134,0.4169,0.381,0.4044,0.3888,0.4442,0.4312,0.4324,0.4951,0.423];
+        // Google CPC
+        const cpcGGData = [0.9652,0.8426,0.7781,0.7657,0.7146,0.7635,0.713,0.6902,0.7201,0.7109,0.7096,0.7347,0.6779,0.6967,0.6742,0.6871,0.677,0.6531,0.6688,0.6891,0.6718,0.631,0.6544,0.7059,0.7266,0.665,0.6692,0.7001,0.6345,0.7283,0.7242,0.6483,0.6675,0.6648,0.6592,0.6538,0.672,0.7051,0.6418,0.6535];
+        // 转化率 (%)
+        const cvrData = [3.71,2.88,2.46,1.95,1.63,1.8,1.76,1.86,2.45,1.53,1.71,1.38,1.57,1.97,1.5,2.03,1.53,2.05,1.93,1.55,1.24,1.46,1.28,1.73,1.42,1.28,1.28,1.21,1.22,1.45,1.42,1.48,1.35,1.23,0.16,0.77,1.48,1.28,1.59,1.47];
+        // 加购率 (%)
+        const addcartData = [9.91,9.08,7.37,6.93,5.11,5.62,6.13,5.84,6.81,4.54,4.51,4.61,4.34,4.96,5.09,4.51,4.29,5.62,5.47,4.28,3.91,3.77,3.39,3.69,4.37,3.99,3.56,3.75,3.44,3.71,3.49,3.7,4.32,3.56,0.52,2.28,3.13,3.84,4.12,4.09];
+        // 毛利率 (%)
+        const gpmData = [10.32,-7.5,-15.58,-37.52,-52.96,-21.71,-24.8,-10.52,15.95,-11.77,-2.72,-27.74,-8.68,10.71,-11.55,11.53,-9.78,7.91,-3.64,-4.84,-15.5,-2.4,-10.47,8.94,-21.85,-13.93,-13.83,-9.61,-10.31,0.75,-0.6,-11.42,-9.27,-3.33,-30.79,-1.72,6.92,-11.61,3.4,-5.46];
+        // 提交订单率 (%)
+        const submitData = [63.82,59.62,60.59,60.77,65.05,61.04,60.9,57.97,61.44,60.34,68.25,54.47,68.42,70.0,58.78,70.69,65.66,70.8,66.41,70.79,66.67,67.33,64.44,69.64,63.21,64.52,66.67,65.85,61.8,64.52,71.28,72.73,66.36,61.36,55.88,69.57,70.87,57.01,65.79,66.04];
+        // 支付成功率 (%)
+        const payData = [89.2,82.01,85.31,80.91,85.95,82.98,76.84,87.5,87.23,87.14,91.86,89.55,87.18,83.67,81.82,92.68,84.62,92.5,84.71,93.65,96.0,86.76,93.1,94.87,88.06,91.67,85.71,90.74,96.36,98.33,91.04,93.06,93.15,96.3,94.74,89.06,93.15,90.16,93.33,90.0];
+        // 填写地址率 (%)
+        const addressRate = [79.5,80.93,82.87,78.49,75.32,78.85,82.61,83.01,82.76,84.92,73.17,81.58,92.86,79.39,85.34,80.81,85.84,86.72,84.27,86.67,88.12,81.11,89.29,82.08,78.49,82.14,85.37,84.27,78.49,82.98,88.89,79.09,78.41,83.82,83.7,81.55,82.24,86.84,83.02];
+        // 选择物流率 (%)
+        const logisticsRate = [81.75,92.67,84.67,89.73,89.66,91.87,87.72,86.61,92.71,87.85,88.89,91.4,87.69,91.35,89.9,96.25,93.81,90.09,88.0,90.77,85.39,87.67,85.0,87.36,91.78,91.3,91.43,86.67,93.15,91.03,95.45,88.51,88.41,82.46,92.21,89.29,85.23,85.86,86.36];
+
+        // 事件标记
+        const eventMarkLines = [
+            { xAxis: '3/12', name: 'VAT上线 (加征23%税)', lineStyle: { color: '#ff4d4f', width: 2, type: 'dashed' }, label: { show: true, formatter: 'VAT上线', position: 'end', offset: [5,10] } },
+            { xAxis: '3/16', name: '第一次热卖品改价', lineStyle: { color: '#fa8c16', width: 2, type: 'dashed' }, label: { show: true, formatter: '首次改价', position: 'end', offset: [5,10] } },
+            { xAxis: '3/19', name: '复活节物流时效不可达', lineStyle: { color: '#f5222d', width: 2, type: 'dashed' }, label: { show: true, formatter: '复活节影响', position: 'end', offset: [5,10] } },
+            { xAxis: '3/20', name: '3/20多项优化\n(快递不加税/去税费描述/二次改价)', lineStyle: { color: '#52c41a', width: 2, type: 'dashed' }, label: { show: true, formatter: '多项优化', position: 'end', offset: [5,20] } },
+            { xAxis: '4/2', name: 'IE结算传值改为含税价', lineStyle: { color: '#1890ff', width: 2, type: 'dashed' }, label: { show: true, formatter: '结算含税', position: 'end', offset: [5,10] } },
+            { xAxis: '4/10', name: '全站统一售价\n(支付语言包调整)', lineStyle: { color: '#722ed1', width: 2, type: 'dashed' }, label: { show: true, formatter: '统一售价', position: 'end', offset: [5,20] } },
+            { xAxis: '4/10', name: '结算前传值异常', lineStyle: { color: '#eb2f96', width: 2, type: 'dotted' }, label: { show: true, formatter: '传值异常', position: 'start', offset: [-5, -20] } }
+        ];
+
+        // 初始化图表
+        const mainChart = echarts.init(document.getElementById('main'));
+        const slicerChart = echarts.init(document.getElementById('slicerChart'));
+        const dim2Chart1 = echarts.init(document.getElementById('dim2Chart1'));
+        const dim2Chart2 = echarts.init(document.getElementById('dim2Chart2'));
+
+        // 主图表配置：调整左轴范围以显示低值数据
+        const option1 = {
+            title: { text: '维度一：全站核心趋势', left: 'center' },
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['转化率', '加购率', '毛利率'], top: 40 },
+            grid: { top: '20%', left: '7%', right: '8%', bottom: '12%' },
+            xAxis: { type: 'category', data: dateAxisFull, axisLabel: { rotate: 35 } },
+            yAxis: [
+                { type: 'value', name: '率 (%)', min: 0, max: 12 },
+                { type: 'value', name: '毛利率 (%)', min: -60, max: 25, position: 'right' }
+            ],
+            series: [
+                { name: '转化率', type: 'line', smooth: true, yAxisIndex: 0, data: cvrData },
+                { name: '加购率', type: 'line', smooth: true, yAxisIndex: 0, data: addcartData },
+                { name: '毛利率', type: 'bar', yAxisIndex: 1, data: gpmData, itemStyle: { color: p => p.value >=0 ? '#ff4d4f' : '#52c41a' } },
+                { name: '事件', type: 'line', data: [], markLine: { data: eventMarkLines, symbol: 'none' }, lineStyle: { opacity:0 }, showSymbol: false }
+            ]
+        };
+
+        function updateSlicer(metricKey) {
+            const cfg = {
+                browse: { name: '浏览人数', data: browseData, yName: '人数' },
+                sales: { name: '销售额', data: salesData, yName: '金额' },
+                roi: { name: 'ROI', data: roiData, yName: '系数' },
+                grossProfit: { name: '毛利润', data: grossProfitData, yName: '金额' },
+                avgOrder: { name: '客单价', data: avgOrderData, yName: '金额' },
+                cpc: { name: 'CPC', dataFB: cpcFBData, dataGG: cpcGGData, type:'multi' }
+            }[metricKey];
+            let yAxis = { type:'value', name: cfg.yName };
+            // 调整浏览人数Y轴范围，确保极端值可见
+            if (metricKey === 'browse') { yAxis.min = 3000; yAxis.max = 25000; }
+            if (metricKey === 'sales') yAxis.min = 2000;
+            if (metricKey === 'roi') { yAxis.min = 0.8; yAxis.max = 2.6; }
+            if (metricKey === 'grossProfit') { yAxis.min = -2500; yAxis.max = 1500; }
+            if (metricKey === 'avgOrder') { yAxis.min = 35; yAxis.max = 60; }
+            if (metricKey === 'cpc') { yAxis.min = 0.3; yAxis.max = 1.0; }
+            let opt = {
+                title: { text: cfg.name, left:'center' },
+                tooltip: { trigger:'axis' },
+                xAxis: { type:'category', data: dateAxisFull, axisLabel: { rotate:35 } },
+                yAxis: yAxis,
+                grid: { bottom:'15%', containLabel:true },
+                series: []
+            };
+            if (cfg.type === 'multi') {
+                opt.legend = { data: ['Facebook','Google'], top:30 };
+                opt.series = [
+                    { name:'Facebook', type:'line', data: cfg.dataFB, smooth:true, markLine: { data: eventMarkLines } },
+                    { name:'Google', type:'line', data: cfg.dataGG, smooth:true, markLine: { data: eventMarkLines } }
+                ];
+            } else {
+                opt.series = [{ name: cfg.name, type:'line', data: cfg.data, smooth:true, markLine: { data: eventMarkLines } }];
+            }
+            slicerChart.setOption(opt, true);
+        }
+
+        function buildSlicerButtons() {
+            const group = document.getElementById('slicerBtnGroup');
+            group.innerHTML = '';
+            const metrics = ['browse','sales','roi','grossProfit','avgOrder','cpc'];
+            const names = ['浏览人数','销售额','ROI','毛利润','客单价','CPC'];
+            metrics.forEach((key, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'slicer-btn' + (i===0?' active':'');
+                btn.innerText = names[i];
+                btn.onclick = () => {
+                    group.querySelectorAll('.slicer-btn').forEach(b=>b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updateSlicer(key);
+                };
+                group.appendChild(btn);
+            });
+            return metrics[0];
+        }
+
+        const option2_1 = {
+            title: { text: '提交订单率 & 支付成功率', left:'center' },
+            tooltip: { trigger:'axis' },
+            legend: { data: ['提交订单率','支付成功率'], top:40 },
+            grid: { top:'22%', left:'7%', right:'8%', bottom:'12%' },
+            xAxis: { type:'category', data: daysWithoutBase, axisLabel: { rotate:35 } },
+            yAxis: [
+                { type:'value', name:'提交率 (%)', min:50, max:75 },
+                { type:'value', name:'支付成功率 (%)', min:75, max:100, position:'right' }
+            ],
+            series: [
+                { name:'提交订单率', type:'line', smooth:true, yAxisIndex:0, data: submitData.slice(1) },
+                { name:'支付成功率', type:'line', smooth:true, yAxisIndex:1, data: payData.slice(1) },
+                { name:'事件', type:'line', data:[], markLine: { data: eventMarkLines }, lineStyle:{opacity:0}, showSymbol:false }
+            ]
+        };
+        const option2_2 = {
+            title: { text: '填写地址率 & 选择物流率', left:'center' },
+            tooltip: { trigger:'axis' },
+            legend: { data: ['填写地址率','选择物流率'], top:40 },
+            grid: { top:'22%', left:'7%', right:'8%', bottom:'12%' },
+            xAxis: { type:'category', data: daysWithoutBase, axisLabel: { rotate:35 } },
+            yAxis: [
+                { type:'value', name:'填写地址率 (%)', min:70, max:95 },
+                { type:'value', name:'选择物流率 (%)', min:80, max:100, position:'right' }
+            ],
+            series: [
+                { name:'填写地址率', type:'line', smooth:true, yAxisIndex:0, data: addressRate, lineStyle:{color:'#722ed1',width:3} },
+                { name:'选择物流率', type:'line', smooth:true, yAxisIndex:1, data: logisticsRate, lineStyle:{color:'#13c2c2',width:3} },
+                { name:'事件', type:'line', data:[], markLine: { data: eventMarkLines }, lineStyle:{opacity:0}, showSymbol:false }
+            ]
+        };
+
+        function setConclusion(tab) {
+            const title = document.getElementById('conclusionTabName');
+            const content = document.getElementById('conclusionContent');
+            if (tab === '1') {
+                title.innerText = '维度一：全站核心趋势';
+                content.innerHTML = `<ul>
+                    <li><b>VAT上线冲击猛烈</b>：3/12加征23%税后转化率从3.71%腰斩，毛利率一度跌至-52.82%。</li>
+                    <li><b>首次改价止跌</b>：3/16热卖品改价后转化小幅回升，但利润仍为负值。</li>
+                    <li><b>3/20多项优化集中落地</b>：快递物流不加税、前端删除税费描述、二次改价同步执行，但流量基数小导致反馈不明显。</li>
+                    <li><b>后续调整逐步显效</b>：4/2结算传值含税、4/10全站统一售价后，毛利率波动收窄，支付成功率维持高位。但4/10当日存在结算前传值异常，对部分数据造成扰动。</li>
+                    <li><b>CPC持续走低</b>：FB/Google CPC自VAT后下降，获客成本降低但精准度可能受影响。</li>
+                </ul>`;
+            } else {
+                title.innerText = '维度二：结算端表现';
+                content.innerHTML = `<ul>
+                    <li><b>提交订单率波动中提升</b>：3/20多项优化后提交率一度超过70%，4/10统一售价后维持较好水平，但当日传值异常可能造成短暂波动。</li>
+                    <li><b>支付成功率稳健</b>：多数时间在85%以上，4月后接近95%。</li>
+                    <li><b>地址填写率起伏较大</b>：3/24达到峰值92.86%，后期回落至80%附近，可能与税费显示策略调整有关。</li>
+                    <li><b>物流选择率高位运行</b>：整体在85%~96%，用户对物流选项敏感度较低。</li>
+                </ul>`;
+            }
+        }
+
+        function updateEventNote() {
+            const div = document.getElementById('eventNoteArea');
+            div.innerHTML = `
+                <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:space-between;">
+                    <div><strong style="color:#ff4d4f;">3/12</strong> VAT上线 (加征23%税)</div>
+                    <div><strong style="color:#fa8c16;">3/16</strong> 第一次热卖品改价</div>
+                    <div><strong style="color:#f5222d;">3/19</strong> 复活节物流时效不可达</div>
+                    <div><strong style="color:#52c41a;">3/20</strong> 多项优化 (快递不加税/去税费描述/二次改价)</div>
+                    <div><strong style="color:#1890ff;">4/2</strong> IE结算传值改为含税价</div>
+                    <div><strong style="color:#722ed1;">4/10</strong> 全站统一售价 & 支付语言包调整</div>
+                    <div><strong style="color:#eb2f96;">4/10</strong> 结算前传值异常</div>
+                </div>
+            `;
+        }
+
+        function switchTab(tabId) {
+            const isDim1 = tabId === '1';
+            document.getElementById('mainContainer').style.display = isDim1 ? 'block' : 'none';
+            document.getElementById('dim2Container').style.display = isDim1 ? 'none' : 'block';
+            setConclusion(tabId);
+            if (isDim1) {
+                mainChart.setOption(option1, true);
+                const firstMetric = buildSlicerButtons();
+                updateSlicer(firstMetric);
+                setTimeout(() => { mainChart.resize(); slicerChart.resize(); }, 50);
+            } else {
+                dim2Chart1.setOption(option2_1, true);
+                dim2Chart2.setOption(option2_2, true);
+                setTimeout(() => { dim2Chart1.resize(); dim2Chart2.resize(); }, 50);
+            }
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+                this.classList.add('active');
+                switchTab(this.dataset.tab);
+            });
+        });
+
+        // 初始化
+        updateEventNote();
+        switchTab('1');
+        window.addEventListener('resize', () => {
+            mainChart.resize();
+            slicerChart.resize();
+            dim2Chart1.resize();
+            dim2Chart2.resize();
+        });
+    })();
+</script>
+</body>
+</html>
